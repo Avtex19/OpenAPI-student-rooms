@@ -13,8 +13,7 @@ A comprehensive REST API specification for managing students and rooms designed 
 - [Error Handling](#error-handling)
 - [Usage Examples](#usage-examples)
 - [Response Format](#response-format)
-- [Support](#support)
-- [License](#license)
+
 
 ## Overview
 
