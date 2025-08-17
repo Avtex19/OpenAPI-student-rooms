@@ -1,0 +1,1536 @@
+openapi: 3.0.3
+info:
+  title: Student Rooms Management API
+  description: |
+    A comprehensive REST API for managing students and rooms in an educational institution.
+    
+    This API provides:
+    - Complete CRUD operations for students and rooms
+    - Ability to find all students in a specific room
+    - Mechanism to move students between rooms (single and bulk operations)
+    - Comprehensive error handling and validation
+    - Room capacity management and constraints
+    - Audit trail with timestamps
+    - Health monitoring endpoints
+    
+    ## Features
+    - **Student Management**: Create, read, update, and delete student records
+    - **Room Management**: Create, read, update, and delete room records with capacity constraints
+    - **Room Assignment**: Find students in specific rooms and move students between rooms
+    - **Bulk Operations**: Move multiple students simultaneously
+    - **Data Validation**: Comprehensive input validation and error handling
+    - **Pagination**: Support for paginated responses where applicable
+    - **Audit Trail**: Track creation and modification timestamps
+    - **Capacity Management**: Enforce room capacity limits
+    
+    ## Authentication
+    This API uses API key authentication. Include your API key in the `X-API-Key` header.
+    
+    ## Rate Limiting
+    The API implements rate limiting to ensure fair usage:
+    - **100 requests per minute** per API key
+    - **1000 requests per hour** per API key
+    - Rate limit information is included in response headers:
+      - `X-RateLimit-Limit`: Maximum requests per window
+      - `X-RateLimit-Remaining`: Remaining requests in current window
+      - `X-RateLimit-Reset`: Time when the rate limit resets (Unix timestamp)
+    - When rate limit is exceeded, the API returns `429 Too Many Requests`
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@studentrooms-api.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.studentrooms.com/v1
+    description: Production server
+  - url: https://staging-api.studentrooms.com/v1
+    description: Staging server
+  - url: http://localhost:8000/v1
+    description: Local development server
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  # ========================================
+  # HEALTH CHECK ENDPOINT
+  # ========================================
+  
+  /health:
+    get:
+      summary: Health check
+      description: Check the health status of the API and get system information
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: API is healthy
+                  value:
+                    status: "healthy"
+                    timestamp: "2024-01-15T10:30:00Z"
+                    version: "1.0.0"
+                    uptime: 3600
+                    students_count: 10000
+                    rooms_count: 1000
+                    message: "Student Rooms API is running normally"
+        '503':
+          description: API is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                unhealthy:
+                  summary: API is unhealthy
+                  value:
+                    status: "unhealthy"
+                    timestamp: "2024-01-15T10:30:00Z"
+                    version: "1.0.0"
+                    uptime: 3600
+                    error: "Database connection failed"
+                    message: "API is experiencing issues"
+
+  # ========================================
+  # STUDENT ENDPOINTS
+  # ========================================
+  
+  /students:
+    get:
+      summary: Get all students
+      description: Retrieve a paginated list of all students with optional filtering
+      operationId: getStudents
+      tags:
+        - Students
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination (starts from 1)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of students per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: room_id
+          in: query
+          description: Filter students by room ID
+          required: false
+          schema:
+            type: integer
+        - name: sex
+          in: query
+          description: Filter students by gender
+          required: false
+          schema:
+            type: string
+            enum: [M, F]
+        - name: search
+          in: query
+          description: Search students by name (case-insensitive)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved students
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentListResponse'
+              examples:
+                success:
+                  summary: Successful response
+                  value:
+                    success: true
+                    data:
+                      students:
+                        - id: 1
+                          name: "John Doe"
+                          birthday: "2000-01-15T00:00:00.000000"
+                          room: 101
+                          sex: "M"
+                        - id: 2
+                          name: "Jane Smith"
+                          birthday: "1999-05-20T00:00:00.000000"
+                          room: 101
+                          sex: "F"
+                      pagination:
+                        page: 1
+                        limit: 20
+                        total: 2
+                        total_pages: 1
+                    message: "Students retrieved successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create a new student
+      description: Create a new student record with validation
+      operationId: createStudent
+      tags:
+        - Students
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStudentRequest'
+            examples:
+              valid_student:
+                summary: Valid student data
+                value:
+                  name: "Alice Johnson"
+                  birthday: "2001-03-10T00:00:00.000000"
+                  room: 102
+                  sex: "F"
+      responses:
+        '201':
+          description: Student created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+              examples:
+                created:
+                  summary: Student created
+                  value:
+                    success: true
+                    data:
+                      id: 3
+                      name: "Alice Johnson"
+                      birthday: "2001-03-10T00:00:00.000000"
+                      room: 102
+                      sex: "F"
+                    message: "Student created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Student with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_name:
+                  summary: Duplicate student name
+                  value:
+                    success: false
+                    error:
+                      code: "DUPLICATE_STUDENT"
+                      message: "A student with this name already exists"
+                      details: "Student name must be unique"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/{student_id}:
+    get:
+      summary: Get a specific student
+      description: Retrieve a single student by their ID
+      operationId: getStudent
+      tags:
+        - Students
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          description: Unique identifier of the student
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Successfully retrieved student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+              examples:
+                found:
+                  summary: Student found
+                  value:
+                    success: true
+                    data:
+                      id: 1
+                      name: "John Doe"
+                      birthday: "2000-01-15T00:00:00.000000"
+                      room: 101
+                      sex: "M"
+                    message: "Student retrieved successfully"
+        '404':
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Student not found
+                  value:
+                    success: false
+                    error:
+                      code: "STUDENT_NOT_FOUND"
+                      message: "Student not found"
+                      details: "No student exists with the provided ID"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      summary: Update a student
+      description: Update an existing student's information
+      operationId: updateStudent
+      tags:
+        - Students
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          description: Unique identifier of the student
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStudentRequest'
+            examples:
+              update_data:
+                summary: Update student data
+                value:
+                  name: "John Smith"
+                  birthday: "2000-01-15T00:00:00.000000"
+                  room: 103
+                  sex: "M"
+      responses:
+        '200':
+          description: Student updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+              examples:
+                updated:
+                  summary: Student updated
+                  value:
+                    success: true
+                    data:
+                      id: 1
+                      name: "John Smith"
+                      birthday: "2000-01-15T00:00:00.000000"
+                      room: 103
+                      sex: "M"
+                    message: "Student updated successfully"
+        '404':
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      summary: Delete a student
+      description: Remove a student from the system
+      operationId: deleteStudent
+      tags:
+        - Students
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          description: Unique identifier of the student
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Student deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              examples:
+                deleted:
+                  summary: Student deleted
+                  value:
+                    success: true
+                    message: "Student deleted successfully"
+        '404':
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/{student_id}/move:
+    post:
+      summary: Move a student to a different room
+      description: Move a student from their current room to a new room
+      operationId: moveStudent
+      tags:
+        - Room Assignment
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          description: Unique identifier of the student
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveStudentRequest'
+            examples:
+              move_request:
+                summary: Move student request
+                value:
+                  new_room_id: 105
+                  reason: "Room change request"
+      responses:
+        '200':
+          description: Student moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+              examples:
+                moved:
+                  summary: Student moved
+                  value:
+                    success: true
+                    data:
+                      id: 1
+                      name: "John Doe"
+                      birthday: "2000-01-15T00:00:00.000000"
+                      room: 105
+                      sex: "M"
+                    message: "Student moved to room 105 successfully"
+        '404':
+          description: Student or room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                student_not_found:
+                  summary: Student not found
+                  value:
+                    success: false
+                    error:
+                      code: "STUDENT_NOT_FOUND"
+                      message: "Student not found"
+                room_not_found:
+                  summary: Room not found
+                  value:
+                    success: false
+                    error:
+                      code: "ROOM_NOT_FOUND"
+                      message: "Target room not found"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/bulk-move:
+    post:
+      summary: Move multiple students to different rooms
+      description: Move multiple students from their current rooms to new rooms in a single operation
+      operationId: bulkMoveStudents
+      tags:
+        - Room Assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkMoveStudentsRequest'
+            examples:
+              bulk_move:
+                summary: Bulk move students
+                value:
+                  moves: [
+                    {
+                      "student_id": 1,
+                      "new_room_id": 105,
+                      "reason": "Room change request"
+                    },
+                    {
+                      "student_id": 2,
+                      "new_room_id": 106,
+                      "reason": "Room change request"
+                    }
+                  ]
+      responses:
+        '200':
+          description: Students moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkMoveStudentsResponse'
+              examples:
+                success:
+                  summary: Students moved successfully
+                  value:
+                    success: true
+                    data: {
+                      "moved_students": [
+                        {
+                          "id": 1,
+                          "name": "John Doe",
+                          "old_room": 101,
+                          "new_room": 105
+                        },
+                        {
+                          "id": 2,
+                          "name": "Jane Smith",
+                          "old_room": 101,
+                          "new_room": 106
+                        }
+                      ],
+                      "failed_moves": [],
+                      "total_moved": 2,
+                      "total_failed": 0
+                    }
+                    message: "Successfully moved 2 students"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Some moves failed due to capacity constraints or validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkMoveStudentsResponse'
+              examples:
+                partial_failure:
+                  summary: Partial failure
+                  value:
+                    success: true
+                    data: {
+                      "moved_students": [
+                        {
+                          "id": 1,
+                          "name": "John Doe",
+                          "old_room": 101,
+                          "new_room": 105
+                        }
+                      ],
+                      "failed_moves": [
+                        {
+                          "student_id": 2,
+                          "error": "Room 106 is at capacity (max 4 students)"
+                        }
+                      ],
+                      "total_moved": 1,
+                      "total_failed": 1
+                    }
+                    message: "Successfully moved 1 student, 1 move failed"
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========================================
+  # ROOM ENDPOINTS
+  # ========================================
+  
+  /rooms:
+    get:
+      summary: Get all rooms
+      description: Retrieve a paginated list of all rooms with optional filtering
+      operationId: getRooms
+      tags:
+        - Rooms
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination (starts from 1)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of rooms per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: search
+          in: query
+          description: Search rooms by name (case-insensitive)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved rooms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomListResponse'
+              examples:
+                success:
+                  summary: Successful response
+                  value:
+                    success: true
+                    data:
+                      rooms:
+                        - id: 101
+                          name: "Room #101"
+                          student_count: 2
+                        - id: 102
+                          name: "Room #102"
+                          student_count: 1
+                      pagination:
+                        page: 1
+                        limit: 20
+                        total: 2
+                        total_pages: 1
+                    message: "Rooms retrieved successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create a new room
+      description: Create a new room with validation
+      operationId: createRoom
+      tags:
+        - Rooms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+            examples:
+              valid_room:
+                summary: Valid room data
+                value:
+                  name: "Room #1001"
+      responses:
+        '201':
+          description: Room created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+              examples:
+                created:
+                  summary: Room created
+                  value:
+                    success: true
+                    data:
+                      id: 1001
+                      name: "Room #1001"
+                      student_count: 0
+                    message: "Room created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Room with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_name:
+                  summary: Duplicate room name
+                  value:
+                    success: false
+                    error:
+                      code: "DUPLICATE_ROOM"
+                      message: "A room with this name already exists"
+                      details: "Room name must be unique"
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /rooms/{room_id}:
+    get:
+      summary: Get a specific room
+      description: Retrieve a single room by its ID
+      operationId: getRoom
+      tags:
+        - Rooms
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: Unique identifier of the room
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Successfully retrieved room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+              examples:
+                found:
+                  summary: Room found
+                  value:
+                    success: true
+                    data:
+                      id: 101
+                      name: "Room #101"
+                      student_count: 2
+                    message: "Room retrieved successfully"
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Room not found
+                  value:
+                    success: false
+                    error:
+                      code: "ROOM_NOT_FOUND"
+                      message: "Room not found"
+                      details: "No room exists with the provided ID"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      summary: Update a room
+      description: Update an existing room's information
+      operationId: updateRoom
+      tags:
+        - Rooms
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: Unique identifier of the room
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoomRequest'
+            examples:
+              update_data:
+                summary: Update room data
+                value:
+                  name: "Room #101 - Updated"
+      responses:
+        '200':
+          description: Room updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+              examples:
+                updated:
+                  summary: Room updated
+                  value:
+                    success: true
+                    data:
+                      id: 101
+                      name: "Room #101 - Updated"
+                      student_count: 2
+                    message: "Room updated successfully"
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      summary: Delete a room
+      description: Remove a room from the system (only if empty)
+      operationId: deleteRoom
+      tags:
+        - Rooms
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: Unique identifier of the room
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Room deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              examples:
+                deleted:
+                  summary: Room deleted
+                  value:
+                    success: true
+                    message: "Room deleted successfully"
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Cannot delete room with students
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                room_occupied:
+                  summary: Room has students
+                  value:
+                    success: false
+                    error:
+                      code: "ROOM_OCCUPIED"
+                      message: "Cannot delete room with students"
+                      details: "Please move all students to other rooms before deleting"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /rooms/{room_id}/students:
+    get:
+      summary: Get all students in a specific room
+      description: Retrieve all students currently assigned to a specific room
+      operationId: getStudentsInRoom
+      tags:
+        - Room Assignment
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: Unique identifier of the room
+          schema:
+            type: integer
+            minimum: 1
+        - name: page
+          in: query
+          description: Page number for pagination (starts from 1)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of students per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Successfully retrieved students in room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentListResponse'
+              examples:
+                success:
+                  summary: Students in room
+                  value:
+                    success: true
+                    data:
+                      students:
+                        - id: 1
+                          name: "John Doe"
+                          birthday: "2000-01-15T00:00:00.000000"
+                          room: 101
+                          sex: "M"
+                        - id: 2
+                          name: "Jane Smith"
+                          birthday: "1999-05-20T00:00:00.000000"
+                          room: 101
+                          sex: "F"
+                      pagination:
+                        page: 1
+                        limit: 20
+                        total: 2
+                        total_pages: 1
+                    message: "Students in room 101 retrieved successfully"
+        '404':
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                room_not_found:
+                  summary: Room not found
+                  value:
+                    success: false
+                    error:
+                      code: "ROOM_NOT_FOUND"
+                      message: "Room not found"
+                      details: "No room exists with the provided ID"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+# ========================================
+# COMPONENTS
+# ========================================
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    # Student Schemas
+    Student:
+      type: object
+      required:
+        - id
+        - name
+        - birthday
+        - room
+        - sex
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the student
+          example: 1
+        name:
+          type: string
+          description: Full name of the student
+          example: "John Doe"
+          minLength: 1
+          maxLength: 100
+        birthday:
+          type: string
+          format: date-time
+          description: Student's date of birth in ISO format
+          example: "2000-01-15T00:00:00.000000"
+        room:
+          type: integer
+          description: ID of the room where the student is assigned
+          example: 101
+        sex:
+          type: string
+          enum: [M, F]
+          description: Student's gender (M for Male, F for Female)
+          example: "M"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the student was created
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the student was last updated
+          example: "2024-01-15T10:30:00Z"
+
+    CreateStudentRequest:
+      type: object
+      required:
+        - name
+        - birthday
+        - room
+        - sex
+      properties:
+        name:
+          type: string
+          description: Full name of the student
+          example: "Alice Johnson"
+          minLength: 1
+          maxLength: 100
+        birthday:
+          type: string
+          format: date-time
+          description: Student's date of birth in ISO format
+          example: "2001-03-10T00:00:00.000000"
+        room:
+          type: integer
+          description: ID of the room where the student will be assigned
+          example: 102
+          minimum: 1
+        sex:
+          type: string
+          enum: [M, F]
+          description: Student's gender (M for Male, F for Female)
+          example: "F"
+
+    UpdateStudentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Full name of the student
+          example: "Alice Johnson"
+          minLength: 1
+          maxLength: 100
+        birthday:
+          type: string
+          format: date-time
+          description: Student's date of birth in ISO format
+          example: "2001-03-10T00:00:00.000000"
+        room:
+          type: integer
+          description: ID of the room where the student will be assigned
+          example: 102
+          minimum: 1
+        sex:
+          type: string
+          enum: [M, F]
+          description: Student's gender (M for Male, F for Female)
+          example: "F"
+
+    MoveStudentRequest:
+      type: object
+      required:
+        - new_room_id
+      properties:
+        new_room_id:
+          type: integer
+          description: ID of the new room where the student will be moved
+          example: 105
+          minimum: 1
+        reason:
+          type: string
+          description: Optional reason for the room change
+          example: "Room change request"
+          maxLength: 500
+
+    # Room Schemas
+    Room:
+      type: object
+      required:
+        - id
+        - name
+        - capacity
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the room
+          example: 101
+        name:
+          type: string
+          description: Name of the room
+          example: "Room #101"
+          minLength: 1
+          maxLength: 50
+        capacity:
+          type: integer
+          description: Maximum number of students that can be assigned to this room
+          example: 4
+          minimum: 1
+          maximum: 20
+        student_count:
+          type: integer
+          description: Number of students currently in the room
+          example: 2
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the room was created
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the room was last updated
+          example: "2024-01-15T10:30:00Z"
+
+    CreateRoomRequest:
+      type: object
+      required:
+        - name
+        - capacity
+      properties:
+        name:
+          type: string
+          description: Name of the room
+          example: "Room #1001"
+          minLength: 1
+          maxLength: 50
+        capacity:
+          type: integer
+          description: Maximum number of students that can be assigned to this room
+          example: 4
+          minimum: 1
+          maximum: 20
+
+    UpdateRoomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the room
+          example: "Room #101 - Updated"
+          minLength: 1
+          maxLength: 50
+
+    # Response Schemas
+    StudentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Student'
+        message:
+          type: string
+          example: "Student retrieved successfully"
+
+    StudentListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            students:
+              type: array
+              items:
+                $ref: '#/components/schemas/Student'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+        message:
+          type: string
+          example: "Students retrieved successfully"
+
+    RoomResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Room'
+        message:
+          type: string
+          example: "Room retrieved successfully"
+
+    RoomListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            rooms:
+              type: array
+              items:
+                $ref: '#/components/schemas/Room'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+        message:
+          type: string
+          example: "Rooms retrieved successfully"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          description: Number of items per page
+          example: 20
+        total:
+          type: integer
+          description: Total number of items
+          example: 100
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 5
+
+    # Error Schemas
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+              example: "STUDENT_NOT_FOUND"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Student not found"
+            details:
+              type: string
+              description: Additional error details
+              example: "No student exists with the provided ID"
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Validation failed"
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: "name"
+                  message:
+                    type: string
+                    example: "Name is required"
+              example:
+                - field: "name"
+                  message: "Name is required"
+                - field: "birthday"
+                  message: "Invalid date format"
+
+    # Bulk Operations Schemas
+    BulkMoveStudentsRequest:
+      type: object
+      required:
+        - moves
+      properties:
+        moves:
+          type: array
+          description: Array of student moves to perform
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required:
+              - student_id
+              - new_room_id
+            properties:
+              student_id:
+                type: integer
+                description: ID of the student to move
+                example: 1
+                minimum: 1
+              new_room_id:
+                type: integer
+                description: ID of the new room for the student
+                example: 105
+                minimum: 1
+              reason:
+                type: string
+                description: Optional reason for the move
+                example: "Room change request"
+                maxLength: 500
+
+    BulkMoveStudentsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            moved_students:
+              type: array
+              description: List of successfully moved students
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  name:
+                    type: string
+                    example: "John Doe"
+                  old_room:
+                    type: integer
+                    example: 101
+                  new_room:
+                    type: integer
+                    example: 105
+            failed_moves:
+              type: array
+              description: List of failed moves with error details
+              items:
+                type: object
+                properties:
+                  student_id:
+                    type: integer
+                    example: 2
+                  error:
+                    type: string
+                    example: "Room 106 is at capacity (max 4 students)"
+            total_moved:
+              type: integer
+              description: Total number of successfully moved students
+              example: 2
+            total_failed:
+              type: integer
+              description: Total number of failed moves
+              example: 0
+        message:
+          type: string
+          example: "Successfully moved 2 students"
+
+    # Health Check Schema
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Health status of the API
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: Current timestamp
+          example: "2024-01-15T10:30:00Z"
+        version:
+          type: string
+          description: API version
+          example: "1.0.0"
+        uptime:
+          type: integer
+          description: API uptime in seconds
+          example: 3600
+        students_count:
+          type: integer
+          description: Total number of students in the system
+          example: 10000
+        rooms_count:
+          type: integer
+          description: Total number of rooms in the system
+          example: 1000
+        message:
+          type: string
+          description: Health status message
+          example: "Student Rooms API is running normally"
+        error:
+          type: string
+          description: Error message if API is unhealthy
+          example: "Database connection failed"
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid_id:
+              summary: Invalid ID format
+              value:
+                success: false
+                error:
+                  code: "INVALID_ID"
+                  message: "Invalid ID format"
+                  details: "ID must be a positive integer"
+            missing_required:
+              summary: Missing required fields
+              value:
+                success: false
+                error:
+                  code: "MISSING_REQUIRED_FIELDS"
+                  message: "Missing required fields"
+                  details: "Name, birthday, room, and sex are required"
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missing_api_key:
+              summary: Missing API key
+              value:
+                success: false
+                error:
+                  code: "MISSING_API_KEY"
+                  message: "API key is required"
+                  details: "Include your API key in the X-API-Key header"
+            invalid_api_key:
+              summary: Invalid API key
+              value:
+                success: false
+                error:
+                  code: "INVALID_API_KEY"
+                  message: "Invalid API key"
+                  details: "The provided API key is not valid"
+
+    ValidationError:
+      description: Validation error - invalid data format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+          examples:
+            invalid_date:
+              summary: Invalid date format
+              value:
+                success: false
+                error:
+                  code: "VALIDATION_ERROR"
+                  message: "Validation failed"
+                  details:
+                    - field: "birthday"
+                      message: "Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.ssssss)"
+            invalid_gender:
+              summary: Invalid gender value
+              value:
+                success: false
+                error:
+                  code: "VALIDATION_ERROR"
+                  message: "Validation failed"
+                  details:
+                    - field: "sex"
+                      message: "Gender must be either 'M' or 'F'"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            server_error:
+              summary: Internal server error
+              value:
+                success: false
+                error:
+                  code: "INTERNAL_SERVER_ERROR"
+                  message: "An internal server error occurred"
+                  details: "Please try again later or contact support"
+
+tags:
+  - name: Health
+    description: Health check and monitoring endpoints
+  - name: Students
+    description: Operations for managing student records
+  - name: Rooms
+    description: Operations for managing room records
+  - name: Room Assignment
+    description: Operations for managing student room assignments
