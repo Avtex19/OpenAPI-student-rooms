@@ -1,6 +1,6 @@
 # Student Rooms Management API
 
-A comprehensive REST API specification for managing students and rooms designed with OpenAPI 3.0.
+A comprehensive REST API specification for managing students and rooms designed with OpenAPI 3.0.3.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -14,10 +14,9 @@ A comprehensive REST API specification for managing students and rooms designed 
 - [Usage Examples](#usage-examples)
 - [Response Format](#response-format)
 
-
 ## Overview
 
-This project provides a complete OpenAPI 3.0 specification for a Student Rooms Management API. It defines all endpoints, request/response schemas, authentication, business rules, and comprehensive features for managing students and room assignments in an educational institution.
+This project provides a complete OpenAPI 3.0.3 specification for a Student Rooms Management API. It defines all endpoints, request/response schemas, JWT authentication, business rules, and comprehensive enterprise features for managing students and room assignments in an educational institution.
 
 ## Features
 
@@ -25,21 +24,24 @@ This project provides a complete OpenAPI 3.0 specification for a Student Rooms M
 - Complete CRUD operations for students and rooms
 - Student room assignment management with capacity constraints
 - Advanced filtering and search capabilities
-- Pagination support for all list endpoints
-- API key authentication with rate limiting
+- Pagination support with X-Total-Count headers
+- JWT Bearer token authentication
 - Comprehensive error handling and validation
 
-### Advanced Features
-- **Bulk Operations**: Move multiple students simultaneously
-- **Health Monitoring**: Health check endpoint with system information
-- **Audit Trail**: Track creation and modification timestamps
-- **Capacity Management**: Enforce room capacity limits (1-20 students)
-- **Rate Limiting**: 100 requests/minute, 1000 requests/hour per API key
+### Enterprise Features
+- **JWT Authentication**: Secure Bearer token authentication
+- **Rate Limiting**: 100 requests/minute, 1000 requests/hour per user
+- **Health Monitoring**: Health check endpoint with system metrics
+- **Bulk Operations**: Move multiple students simultaneously with transaction support
+- **Audit Trail**: Track creation/modification timestamps and move reasons
+- **Capacity Management**: Enforce room capacity limits (1-50 students)
 - **Business Rules**: Prevent deletion of occupied rooms, enforce unique names
+- **Search & Filtering**: Name search, room filtering, gender filtering
+- **System Metrics**: Real-time occupancy and system statistics
 
 ## API Documentation
 
-This project contains a complete OpenAPI 3.0 specification that can be used with various API documentation tools:
+This project contains a complete OpenAPI 3.0.3 specification that can be used with various API documentation tools:
 
 ### Viewing the Documentation
 
@@ -65,7 +67,7 @@ This project contains a complete OpenAPI 3.0 specification that can be used with
 OpenAPI-student-rooms/
 ├── docs/
 │   └── specs/
-│       └── openapi.yaml  # Complete OpenAPI 3.0 specification
+│       └── openapi.yaml  # Complete OpenAPI 3.0.3 specification
 ├── data/
 │   ├── students.json     # Sample student data
 │   └── rooms.json        # Sample room data
@@ -75,21 +77,23 @@ OpenAPI-student-rooms/
 
 ## Authentication
 
-This API uses API key authentication. Include your API key in the `X-API-Key` header with every request:
+This API uses JWT Bearer token authentication. Include your JWT token in the `Authorization` header with every request:
 
 ```bash
-curl -H "X-API-Key: your-api-key-here" \
+curl -H "Authorization: Bearer your-jwt-token-here" \
      https://api.studentrooms.com/v1/students
 ```
 
-### Test API Key
-For testing purposes, use: `test-api-key`
+### JWT Token Format
+```
+Authorization: Bearer <your-jwt-token>
+```
 
 ## Rate Limiting
 
 The API implements rate limiting to ensure fair usage:
-- **100 requests per minute** per API key
-- **1000 requests per hour** per API key
+- **100 requests per minute** per authenticated user
+- **1000 requests per hour** per authenticated user
 - Rate limit information is included in response headers:
   - `X-RateLimit-Limit`: Maximum requests per window
   - `X-RateLimit-Remaining`: Remaining requests in current window
@@ -102,7 +106,7 @@ The API is organized into four main categories:
 
 ### Health
 Health check and monitoring endpoints:
-- `GET /health` - Check API health status and system information
+- `GET /health` - Check API health status and system metrics
 
 ### Students
 Operations for managing student records:
@@ -119,12 +123,12 @@ Operations for managing room records:
 - `GET /rooms/{id}` - Get a specific room
 - `PUT /rooms/{id}` - Update a room
 - `DELETE /rooms/{id}` - Delete a room (only if empty)
-
-### Room Assignment
-Operations for managing student room assignments:
-- `POST /students/{id}/move` - Move student to a different room
-- `POST /students/bulk-move` - Move multiple students to different rooms
 - `GET /rooms/{id}/students` - Get all students in a specific room
+
+### Administration
+Cross-resource and bulk operations:
+- `PATCH /students/{student_id}/move` - Move student to a different room
+- `PATCH /students/bulk-move` - Move multiple students to different rooms
 
 ## Data Models
 
@@ -133,9 +137,9 @@ Operations for managing student room assignments:
 {
   "id": 1,
   "name": "John Doe",
-  "birthday": "2000-01-15T00:00:00.000000",
-  "room": 101,
+  "age": 20,
   "sex": "M",
+  "room_id": 101,
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-15T10:30:00Z"
 }
@@ -147,7 +151,7 @@ Operations for managing student room assignments:
   "id": 101,
   "name": "Room #101",
   "capacity": 4,
-  "student_count": 2,
+  "current_occupancy": 2,
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-15T10:30:00Z"
 }
@@ -159,10 +163,13 @@ Operations for managing student room assignments:
   "status": "healthy",
   "timestamp": "2024-01-15T10:30:00Z",
   "version": "1.0.0",
-  "uptime": 3600,
-  "students_count": 10000,
-  "rooms_count": 1000,
-  "message": "Student Rooms API is running normally"
+  "uptime_seconds": 3600,
+  "metrics": {
+    "students_count": 10000,
+    "rooms_count": 1000,
+    "avg_occupancy": 75.5
+  },
+  "message": "All systems operational"
 }
 ```
 
@@ -172,25 +179,23 @@ The API uses a standardized error response format:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable error message",
-    "details": "Additional error details"
-  }
+  "code": "ERR_STUDENT_NOT_FOUND",
+  "message": "Student not found",
+  "details": "No student exists with ID 999"
 }
 ```
 
 ### Common Error Codes
-- `INVALID_API_KEY`: Authentication failed
-- `STUDENT_NOT_FOUND`: Student with specified ID not found
-- `ROOM_NOT_FOUND`: Room with specified ID not found
-- `DUPLICATE_STUDENT`: Student name already exists
-- `DUPLICATE_ROOM`: Room name already exists
-- `ROOM_OCCUPIED`: Cannot delete room with students
-- `ROOM_CAPACITY_EXCEEDED`: Room is at maximum capacity
-- `VALIDATION_ERROR`: Request validation failed
-- `RATE_LIMIT_EXCEEDED`: Rate limit exceeded
+- `ERR_MISSING_TOKEN`: Authentication token required
+- `ERR_INVALID_TOKEN`: Invalid or expired JWT token
+- `ERR_STUDENT_NOT_FOUND`: Student with specified ID not found
+- `ERR_ROOM_NOT_FOUND`: Room with specified ID not found
+- `ERR_DUPLICATE_NAME`: Student name already exists
+- `ERR_DUPLICATE_ROOM`: Room name already exists
+- `ERR_ROOM_OCCUPIED`: Cannot delete room with assigned students
+- `ERR_ROOM_FULL`: Room is at maximum capacity
+- `ERR_VALIDATION_FAILED`: Request validation failed
+- `ERR_CAPACITY_VIOLATION`: Cannot reduce capacity below current occupancy
 
 ## Usage Examples
 
@@ -201,26 +206,26 @@ curl https://api.studentrooms.com/v1/health
 
 ### Get All Students
 ```bash
-curl -H "X-API-Key: test-api-key" \
-     "https://api.studentrooms.com/v1/students?page=1&limit=10"
+curl -H "Authorization: Bearer your-jwt-token" \
+     "https://api.studentrooms.com/v1/students?limit=10&offset=0"
 ```
 
 ### Create a New Student
 ```bash
-curl -X POST -H "X-API-Key: test-api-key" \
+curl -X POST -H "Authorization: Bearer your-jwt-token" \
      -H "Content-Type: application/json" \
      -d '{
        "name": "Jane Smith",
-       "birthday": "2001-05-20T00:00:00.000000",
-       "room": 101,
-       "sex": "F"
+       "age": 19,
+       "sex": "F",
+       "room_id": 101
      }' \
      https://api.studentrooms.com/v1/students
 ```
 
 ### Create a New Room with Capacity
 ```bash
-curl -X POST -H "X-API-Key: test-api-key" \
+curl -X POST -H "Authorization: Bearer your-jwt-token" \
      -H "Content-Type: application/json" \
      -d '{
        "name": "Room #201",
@@ -231,30 +236,30 @@ curl -X POST -H "X-API-Key: test-api-key" \
 
 ### Move Student to Different Room
 ```bash
-curl -X POST -H "X-API-Key: test-api-key" \
+curl -X PATCH -H "Authorization: Bearer your-jwt-token" \
      -H "Content-Type: application/json" \
      -d '{
-       "new_room_id": 102,
-       "reason": "Room change request"
+       "room_id": 102,
+       "reason": "Student requested room change"
      }' \
      https://api.studentrooms.com/v1/students/1/move
 ```
 
 ### Bulk Move Students
 ```bash
-curl -X POST -H "X-API-Key: test-api-key" \
+curl -X PATCH -H "Authorization: Bearer your-jwt-token" \
      -H "Content-Type: application/json" \
      -d '{
        "moves": [
          {
            "student_id": 1,
-           "new_room_id": 105,
-           "reason": "Room change request"
+           "room_id": 105,
+           "reason": "Semester room reassignment"
          },
          {
            "student_id": 2,
-           "new_room_id": 106,
-           "reason": "Room change request"
+           "room_id": 106,
+           "reason": "Semester room reassignment"
          }
        ]
      }' \
@@ -263,65 +268,92 @@ curl -X POST -H "X-API-Key: test-api-key" \
 
 ### Get Students in a Specific Room
 ```bash
-curl -H "X-API-Key: test-api-key" \
-     "https://api.studentrooms.com/v1/rooms/101/students?page=1&limit=20"
+curl -H "Authorization: Bearer your-jwt-token" \
+     "https://api.studentrooms.com/v1/rooms/101/students?limit=20&offset=0"
 ```
 
 ### Filter Students
 ```bash
 # Filter by room
-curl -H "X-API-Key: test-api-key" \
+curl -H "Authorization: Bearer your-jwt-token" \
      "https://api.studentrooms.com/v1/students?room_id=101"
 
 # Filter by gender
-curl -H "X-API-Key: test-api-key" \
+curl -H "Authorization: Bearer your-jwt-token" \
      "https://api.studentrooms.com/v1/students?sex=M"
 
 # Search by name
-curl -H "X-API-Key: test-api-key" \
+curl -H "Authorization: Bearer your-jwt-token" \
      "https://api.studentrooms.com/v1/students?search=john"
 ```
 
 ## Response Format
 
-All successful responses follow this format:
+All successful responses return the requested data directly. List responses include pagination headers:
+
+### Single Resource Response
 ```json
 {
-  "success": true,
-  "data": {
-    // Response data
-  },
-  "message": "Success message"
+  "id": 1,
+  "name": "John Doe",
+  "age": 20,
+  "sex": "M",
+  "room_id": 101,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
 }
 ```
 
-List responses include pagination metadata:
+### List Response with Headers
+```
+X-Total-Count: 100
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "John Doe",
+    "age": 20,
+    "sex": "M",
+    "room_id": 101,
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "name": "Jane Smith",
+    "age": 19,
+    "sex": "F",
+    "room_id": 101,
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+### Bulk Operation Response
 ```json
 {
-  "success": true,
-  "data": {
-    "students": [...],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 100,
-      "total_pages": 5
+  "successful_moves": [
+    {
+      "student_id": 1,
+      "old_room_id": 101,
+      "new_room_id": 105
     }
-  },
-  "message": "Students retrieved successfully"
+  ],
+  "failed_moves": [
+    {
+      "student_id": 2,
+      "error_code": "ERR_ROOM_FULL",
+      "error_message": "Room 106 is at maximum capacity"
+    }
+  ],
+  "summary": {
+    "total_requested": 2,
+    "successful_count": 1,
+    "failed_count": 1
+  }
 }
 ```
 
-Bulk operation responses include detailed results:
-```json
-{
-  "success": true,
-  "data": {
-    "moved_students": [...],
-    "failed_moves": [...],
-    "total_moved": 2,
-    "total_failed": 0
-  },
-  "message": "Successfully moved 2 students"
-}
-```
